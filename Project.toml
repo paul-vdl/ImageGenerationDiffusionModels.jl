@@ -1,0 +1,7 @@
+name = "MyPackage"
+uuid = "7eca0ff8-e3a3-4c84-9005-98dfb23f45a7"
+authors = ["Paul Vidal <p.vidal@campus.tu-berlin.de>"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.11"
