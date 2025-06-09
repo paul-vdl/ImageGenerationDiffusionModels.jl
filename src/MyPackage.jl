@@ -20,7 +20,7 @@ function generate_grid()
     end
 
     canvas2 = clamp01.(canvas)
-    save("grille.png", colorview(Gray, canvas2))
+    save("grid.png", colorview(Gray, canvas2))
     return canvas
 end
 
@@ -33,7 +33,8 @@ function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0
     end
     
     canvas = clamp01.(img) #save the image in .png
-    save("noisy_grid.png", colorview(Gray, canvas)) 
+    save("noisy_img.png", colorview(Gray, canvas)) 
+    return img
 end
 
 end
