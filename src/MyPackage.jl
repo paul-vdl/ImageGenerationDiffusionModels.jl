@@ -4,6 +4,11 @@ using MAT
 using Images
 using FileIO
 
+"""
+    function generate_grid()
+
+Loads the digits data and generates grid
+"""
 function generate_grid()
     data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
     raw = data["syntheticImages"]         # 32x32x1x500
@@ -24,6 +29,22 @@ function generate_grid()
     return canvas
 end
 
+"""
+    function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
+
+Applies forward-noise to an image
+This function adds Gaussian noise to an image during multiple steps, which corresponds to the forward process in diffusion models.
+
+#Arguments
+- 'img' : The input image
+- 'num_noise_steps' : number of steps over which noise should be added to the image (5000 by default).
+- 'beta_min': Minimum beta value (0.0001 by default)
+- 'beta_max': Maximum beta value (0.02 by default)
+
+#Returns
+-An image with noise
+
+"""
 function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
     variance_schedule = beta_min : 1 / num_noise_steps : beta_max #defines how the model adds noise to the image
     epsilon = randn(size(img)) #gaussian noise
