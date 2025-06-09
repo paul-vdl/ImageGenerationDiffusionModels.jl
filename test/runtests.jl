@@ -15,9 +15,9 @@ using Test
 
     @testset "apply_noise" begin
         img = fill(0.7, 64, 64)
-        img_after_noise = apply_noise(img)
+        img_after_noise = MyPackage.apply_noise(img)
         @test !all(img_after_noise .== img)
-        @test isfile(img_after_noise)
+        @test isfile(noisy_img.png)
     end
 
 end
