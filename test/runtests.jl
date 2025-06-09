@@ -18,6 +18,7 @@ using Test
         img_after_noise = apply_noise(img)
         @test !all(img_after_noise .== img)
         @test isfile(img_after_noise)
+    end
 
 end
 
