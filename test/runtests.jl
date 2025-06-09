@@ -6,8 +6,8 @@ using Test
     output_file = "grille.png"
 
     try
-        MyPackage.generate_grid(mat_file, output_file)
-        @test isfile(output_file)  # Vérifie que l'image a bien été générée
+        MyPackage.generate_grid()
+        @test isfile("grid.png")
     catch e
         @error "Erreur lors de l'exécution : $e"
         @test false 
