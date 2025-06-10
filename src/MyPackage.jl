@@ -42,7 +42,7 @@ This function adds Gaussian noise to an image during multiple steps, which corre
 - 'beta_max': Maximum beta value (0.02 by default)
 
 #Returns
--An image with noise
+- An image with noise
 
 """
 function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
@@ -53,7 +53,7 @@ function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0
     img = sqrt(1-beta) .* img + sqrt(beta) .* epsilon
     end
     
-    canvas = clamp01.(img) #save the image in .png
+    canvas = clamp01.(img)
     save("noisy_img.png", colorview(Gray, canvas)) 
     return img
 end
