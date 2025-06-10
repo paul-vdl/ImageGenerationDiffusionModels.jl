@@ -37,7 +37,7 @@ This function adds Gaussian noise to an image during multiple steps, which corre
 
 #Arguments
 - 'img' : The input image
-- 'num_noise_steps' : number of steps over which noise should be added to the image (5000 by default).
+- 'num_noise_steps' : number of steps over which noise should be added to the image (500 by default).
 - 'beta_min': Minimum beta value (0.0001 by default)
 - 'beta_max': Maximum beta value (0.02 by default)
 
