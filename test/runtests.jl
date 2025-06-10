@@ -9,7 +9,7 @@ using Test
         MyPackage.generate_grid()
         @test isfile("grid.png")
     catch e
-        @error "Erreur lors de l'exécution : $e"
+        @error "Error $e"
         @test false 
     end
 

@@ -11,8 +11,8 @@ Loads the digits data and generates grid
 """
 function generate_grid()
     data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
-    raw = data["syntheticImages"]         # 32x32x1x500
-    images = reshape(raw, 32, 32, 500)     # 32x32x500
+    raw = data["syntheticImages"]        
+    images = reshape(raw, 32, 32, 500)     
 
     first64 = images[:, :, 1:64]
     img_size = size(first64, 1), size(first64, 2)
@@ -46,10 +46,10 @@ This function adds Gaussian noise to an image during multiple steps, which corre
 
 """
 function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
-    variance_schedule = beta_min : 1 / num_noise_steps : beta_max #defines how the model adds noise to the image
+    variance_schedule = beta_min : 1 / num_noise_steps : beta_max #the way the model adds noise to the image
     epsilon = randn(size(img)) #gaussian noise
 
-    for beta in variance_schedule #add noise gradually
+    for beta in variance_schedule 
     img = sqrt(1-beta) .* img + sqrt(beta) .* epsilon
     end
     
