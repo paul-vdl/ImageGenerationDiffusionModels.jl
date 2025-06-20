@@ -5,7 +5,7 @@
 [![Build Status](https://github.com/paul-vdl/MyPackage.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/paul-vdl/MyPackage.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/paul-vdl/MyPackage.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/paul-vdl/MyPackage.jl)
 
-The objective of this package is to generate image with diffusion model. In order to do this, we first train a diffusion network to add noise to an existing image and then, we will train it to remove the noise. Thus, the diffusion network will be able to generate image from a random noise image.
+The objective of this package is to generate an image with a diffusion model. In order to do this, we first train a diffusion network to add noise to an existing image and then, we will train it to remove the noise. Thus, the diffusion network will be able to generate image from a random noise image.
 
 For now, the module has two functions : MyPackage.generate_grid and MyPackage.apply_noise.
 
