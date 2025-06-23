@@ -5,12 +5,17 @@ using Images
 using FileIO
 using Flux
 
+using NNlib: pad
+using Statistics: mean
+
+
 
 # Define the model globally with Float32 types
 const model = Chain(
     Dense(32 * 32, 128, relu),  # First layer
     Dense(128, 32 * 32)         # Second layer
 )
+
 
 """
     function generate_grid()
@@ -91,6 +96,7 @@ end
     denoise_image(noisy_img; num_steps=500)
 
 
+
   1. loads the clean 32×32 images,
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
@@ -140,6 +146,96 @@ function generate_image_from_noise()
     generated_img = denoise_image(noisy_img)  # "Denoise" the noisy image
     return generated_img  # Return the generated image
 end
+
+function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
+    half_dim = div(dim, 2)
+    emb = log(10000.0) / (half_dim - 1)
+    emb = exp.((-emb) .* (0:half_dim - 1))
+    emb = t .* emb'
+    emb = hcat(sin.(emb), cos.(emb))
+    return emb
+end
+
+function pad_or_crop(x, ref)
+    _, _, h1, w1 = size(x)
+    _, _, h2, w2 = size(ref)
+    pad_h = max(0, h2 - h1)
+    pad_w = max(0, w2 - w1)
+    x = pad(x, (0,0), (0,0), (pad_h÷2, pad_h - pad_h÷2), (pad_w÷2, pad_w - pad_w÷2))
+    return x[:, :, 1:h2, 1:w2]
+end
+
+function down_block(in_ch, out_ch, time_dim)
+    conv1 = Chain(Conv((3,3), in_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
+    conv2 = Chain(Conv((3,3), out_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
+    downsample = Conv((4,4), out_ch => out_ch, stride=2, pad=1)
+    time_mlp = Dense(time_dim, out_ch)
+
+    return (x, t_emb) -> begin
+        h = conv1(x)
+        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
+        h = h .+ permutedims(t_proj, (4,1,2,3))
+        h = conv2(h)
+        return downsample(h), h
+    end
+end
+
+function up_block(in_ch, out_ch, time_dim)
+    upsample = ConvTranspose((4,4), in_ch => in_ch, stride=2, pad=1)
+    conv1 = Chain(Conv((3,3), in_ch + div(in_ch,2) => out_ch, pad=1), BatchNorm(out_ch), relu)
+    conv2 = Chain(Conv((3,3), out_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
+    time_mlp = Dense(time_dim, out_ch)
+
+    return (x, skip, t_emb) -> begin
+        x = upsample(x)
+        x = pad_or_crop(x, skip)
+        x = cat(x, skip; dims=1)
+        h = conv1(x)
+        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
+        h = h .+ permutedims(t_proj, (4,1,2,3))
+        return conv2(h)
+    end
+end
+
+
+function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
+    conv0 = Conv((3,3), in_ch => 128, pad=1)
+
+    down1 = down_block(128, 256, time_dim)
+    down2 = down_block(256, 512, time_dim)
+    down3 = down_block(512, 1024, time_dim)
+
+    bottleneck = Chain(
+        Conv((3,3), 1024 => 1024, pad=1),
+        BatchNorm(1024),
+        relu,
+        Conv((3,3), 1024 => 1024, pad=1),
+        BatchNorm(1024),
+        relu
+    )
+
+    up1 = up_block(1024, 512, time_dim)
+    up2 = up_block(512, 256, time_dim)
+    up3 = up_block(256, 128, time_dim)
+
+    final = Conv((1,1), 128 => out_ch)
+
+    return (x, t_vec) -> begin
+        t_emb = sinusoidal_embedding(t_vec, time_dim)
+        x0 = conv0(x)
+        x1, skip1 = down1(x0, t_emb)
+        x2, skip2 = down2(x1, t_emb)
+        x3, skip3 = down3(x2, t_emb)
+        x4 = bottleneck(x3)
+        x = up1(x4, skip3, t_emb)
+        x = up2(x, skip2, t_emb)
+        x = up3(x, skip1, t_emb)
+        return final(x)
+    end
+end
+
+
+
 
 end  # End of module MyPackage
 
