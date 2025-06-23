@@ -4,8 +4,18 @@ using MAT
 using Images
 using FileIO
 using Flux
+
 using NNlib: pad
 using Statistics: mean
+
+
+
+# Define the model globally with Float32 types
+const model = Chain(
+    Dense(32 * 32, 128, relu),  # First layer
+    Dense(128, 32 * 32)         # Second layer
+)
+
 
 """
     function generate_grid()
@@ -49,16 +59,92 @@ This function adds Gaussian noise to an image during multiple steps, which corre
 
 """
 function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
-    variance_schedule = beta_min : 1 / num_noise_steps : beta_max #the way the model adds noise to the image
-    epsilon = randn(size(img)) #gaussian noise
+    
+    variance_schedule = beta_min : (beta_max - beta_min) / num_noise_steps : beta_max
+    epsilon = randn(size(img))  # Gaussian noise
 
     for beta in variance_schedule 
-    img = sqrt(1-beta) .* img + sqrt(beta) .* epsilon
+        img = sqrt(1-beta) .* img + sqrt(beta) .* epsilon
     end
-    
+
     canvas = clamp01.(img)
     save("noisy_img.png", colorview(Gray, canvas)) 
-    return img
+
+    return img  
+end
+
+
+
+"""
+    function denoise_image(noisy_img)
+
+Denoises a noisy image using the trained neural network 'model'.
+Given a single input `noisy_img::Matrix{<:Real}`, this function produces
+a denoised version of that input file"""
+function denoise_image(noisy_img::AbstractMatrix{<:Real})
+  flatten32(mat) = reshape(Float32.(mat), :, 1)
+  # Denoise the user’s single image
+  x_input = flatten32(noisy_img)
+  y_pred  = model(x_input)
+  denoised = clamp01.(reshape(y_pred, 32, 32))
+  save("denoised_img.png", colorview(Gray, denoised))
+  return denoised
+end
+#TODO do it also in several small steps; do we train a different model per step?
+
+"""
+    denoise_image(noisy_img; num_steps=500)
+
+
+
+  1. loads the clean 32×32 images,
+  2. creates noisy versions of all of them,
+  3. trains `model` to map noisy→clean by MSE
+"""
+function train_brain(num_steps::Int=500)
+  # 1) Load the clean images
+  data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
+  raw  = data["syntheticImages"]          # size (32,32,1,500)
+  imgs = reshape(raw, 32,32,500)          # now 32×32×500
+  clean_images = [imgs[:,:,i] for i in 1:500]  # vector of 32×32 matrices
+
+  # 2) Make noisy versions
+  noisy_images = [apply_noise(clean_images[i]) for i in 1:500]
+
+  # 3) Flatten to Float32 column‐vectors
+  flatten32(mat) = reshape(Float32.(mat), :, 1)
+  clean_vecs = map(flatten32, clean_images)
+  noisy_vecs = map(flatten32, noisy_images)
+
+  # 4) Zip into (input,target) pairs
+  data_pairs = zip(noisy_vecs, clean_vecs)
+
+  # 5) Set up the optimizer with state
+  opt = Flux.setup(ADAM(), model)
+
+  # 6) Define loss
+  loss(model, x, y) = Flux.Losses.mse(model(x), y)
+
+  # 7) Train for `num_steps` epochs, always passing `model` to train!
+  @info "Training for $num_steps epochs…"
+  for epoch in 1:num_steps
+    Flux.train!(loss, model, data_pairs, opt)
+    if epoch % 10 == 0
+      x0,y0 = first(data_pairs)
+      @info(" epoch $epoch → training loss = $(loss(model, x0,y0))")
+    end # endif
+  end #endfor
+end #end train_brain
+
+"""
+    function generate_image_from_noise()
+
+Generates a new image from random noise and denoises it.
+"""
+function generate_image_from_noise()
+    noisy_img = randn(32, 32)  # Generate random noise
+    generated_img = denoise_image(noisy_img)  # "Denoise" the noisy image
+    return generated_img  # Return the generated image
 end
 
 function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
@@ -148,4 +234,8 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
     end
 end
 
-end
+
+
+
+end  # End of module MyPackage
+
