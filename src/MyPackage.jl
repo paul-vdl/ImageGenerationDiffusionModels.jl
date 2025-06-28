@@ -136,7 +136,7 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
     final = Conv((1,1), 128 => out_ch)
 
     return (x, t_vec) -> begin
-        t_emb = sinusoidal_embedding(t_vec, time_dim)
+        t_emb = sinusoidal_embedding(vec(Float32.(t_vec)), 256)' #time_dim -> 256
         x0 = conv0(x)
         x1, skip1 = down1(x0, t_emb)
         x2, skip2 = down2(x1, t_emb)
@@ -148,5 +148,4 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
         return final(x)
     end
 end
-
 end
