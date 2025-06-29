@@ -148,4 +148,14 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
     end
 end
 
+"""
+Helper function that loads MNIST images and returns loader.
+"""
+function get_data(batch_size)
+    xtrain, ytrain = MLDatasets.MNIST(:train)[:]
+    xtrain = reshape(xtrain, 28, 28, 1, :)
+    DataLoader((xtrain, ytrain), batchsize=batch_size, shuffle=true)
+end
+
+
 end
