@@ -19,5 +19,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/paul-vdl/MyPackage.jl",
-    devbranch="master",
+    devbranch="main",
 )
