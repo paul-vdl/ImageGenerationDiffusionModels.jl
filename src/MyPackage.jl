@@ -101,40 +101,67 @@ end
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
 """
-function train_brain(num_steps::Int=500)
-  # 1) Load the clean images
-  data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
-  raw  = data["syntheticImages"]          # size (32,32,1,500)
-  imgs = reshape(raw, 32,32,500)          # now 32×32×500
-  clean_images = [imgs[:,:,i] for i in 1:500]  # vector of 32×32 matrices
+"""
+Identical training loop from the example code.
+Uses score-matching loss and the same optimizer setup.
+"""
+function train_brain(; kws...)
+    # --- Hyperparameters (copied exactly) ---
+    args = (;
+        η = 1e-4,        # learning rate
+        batch_size = 32, # batch size
+        epochs = 50,     # number of epochs
+        seed = 1,        # random seed
+        cuda = false,    # use CPU (since you don't have GPU)
+        verbose_freq = 10,
+        save_path = "output"
+    )
 
-  # 2) Make noisy versions
-  noisy_images = [apply_noise(clean_images[i]) for i in 1:500]
+    Random.seed!(args.seed)
+    device = cpu  # Force CPU
 
-  # 3) Flatten to Float32 column‐vectors
-  flatten32(mat) = reshape(Float32.(mat), :, 1)
-  clean_vecs = map(flatten32, clean_images)
-  noisy_vecs = map(flatten32, noisy_images)
+    # --- Data Loading (adapted to your dataset) ---
+    data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
+    raw = data["syntheticImages"]
+    xtrain = Float32.(reshape(raw, 32, 32, 1, 500))  # Reshape to WHCN format
+    loader = Flux.DataLoader(xtrain, batchsize=args.batch_size, shuffle=true)
 
-  # 4) Zip into (input,target) pairs
-  data_pairs = zip(noisy_vecs, clean_vecs)
+    # --- Model Setup (use your U-Net) ---
+    model = build_unet() |> device
+    opt = ADAM(args.η)
+    ps = Flux.params(model)
 
-  # 5) Set up the optimizer with state
-  opt = Flux.setup(ADAM(), model)
+    # --- Training Loop (identical to example) ---
+    @info "Start Training, total $(args.epochs) epochs"
+    for epoch in 1:args.epochs
+        for x in loader
+            x = device(x)
+            loss, grad = Flux.withgradient(ps) do
+                # Score-matching loss from example
+                batch_size = size(x)[end]
+                random_t = rand(Float32, batch_size) .* (1.0f0 - 1.0f-5) .+ 1.0f-5
+                z = randn(Float32, size(x))
+                std = reshape(marginal_prob_std(random_t), 1, 1, 1, :)
+                perturbed_x = x + z .* std
+                score = model(perturbed_x, random_t)
+                mean(sum((score .* std .+ z).^2; dims=1:3))
+            end
+            Flux.update!(opt, ps, grad)
+        end
+        @info "Epoch $epoch" loss=loss
+    end
 
-  # 6) Define loss
-  loss(model, x, y) = Flux.Losses.mse(model(x), y)
+    # Save model (optional)
+    !ispath(args.save_path) && mkpath(args.save_path)
+    model_path = joinpath(args.save_path, "model.bson")
+    BSON.@save model_path model
+    @info "Model saved: $(model_path)"
+end
 
-  # 7) Train for `num_steps` epochs, always passing `model` to train!
-  @info "Training for $num_steps epochs…"
-  for epoch in 1:num_steps
-    Flux.train!(loss, model, data_pairs, opt)
-    if epoch % 10 == 0
-      x0,y0 = first(data_pairs)
-      @info(" epoch $epoch → training loss = $(loss(model, x0,y0))")
-    end # endif
-  end #endfor
-end #end train_brain
+# Add marginal_prob_std (required for training)
+function marginal_prob_std(t, sigma=25.0f0)
+    sqrt.((sigma.^(2t) .- 1.0f0) ./ (2.0f0 * log(sigma))
+end
 
 """
     function generate_image_from_noise()
