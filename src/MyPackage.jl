@@ -237,87 +237,103 @@ end
 """
 
 function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
-    # Initial convolution
-    conv0 = Conv((3,3), in_ch => 64, pad=1) |> f32
-    
+    # Initial convolution (maintains 32x32)
+    conv0 = Chain(
+        Conv((3,3), in_ch => 64, pad=SamePad()),
+        BatchNorm(64),
+        x -> relu.(x)
+    ) |> f32
+
     # Downsample path
     down1 = Chain(
-        Conv((3,3), 64 => 128, pad=1),
+        Conv((3,3), 64 => 128, pad=SamePad()),
         BatchNorm(128),
         x -> relu.(x),
-        Conv((4,4), 128 => 128, stride=2, pad=1)
+        Conv((4,4), 128 => 128, stride=2, pad=1)  # 32x32 -> 16x16
     ) |> f32
-    
+
     down2 = Chain(
-        Conv((3,3), 128 => 256, pad=1),
+        Conv((3,3), 128 => 256, pad=SamePad()),
         BatchNorm(256),
         x -> relu.(x),
-        Conv((4,4), 256 => 256, stride=2, pad=1)
+        Conv((4,4), 256 => 256, stride=2, pad=1)  # 16x16 -> 8x8
     ) |> f32
-    
-    # Bottleneck
+
+    # Bottleneck (maintains 8x8)
     bottleneck = Chain(
-        Conv((3,3), 256 => 512, pad=1),
+        Conv((3,3), 256 => 512, pad=SamePad()),
         BatchNorm(512),
         x -> relu.(x),
-        Conv((3,3), 512 => 512, pad=1),
+        Conv((3,3), 512 => 512, pad=SamePad()),
         BatchNorm(512),
         x -> relu.(x)
     ) |> f32
-    
-    # Upsample path with skip connections
+
+    # Upsample path
     up1 = Chain(
-        ConvTranspose((4,4), 512 => 256, stride=2, pad=1),
-        (x) -> x[:, :, 1:32, 1:32],  # Simple cropping
-        (x, skip) -> cat(x, skip; dims=3),
-        Conv((3,3), 512 => 256, pad=1),
+        ConvTranspose((4,4), 512 => 256, stride=2, pad=1),  # 8x8 -> 16x16
+        (x, skip) -> begin
+            # Center crop skip connection if needed
+            skip = center_crop(skip, size(x)[1:2])
+            cat(x, skip; dims=3)
+        end,
+        Conv((3,3), 512 => 256, pad=SamePad()),
         BatchNorm(256),
         x -> relu.(x)
     ) |> f32
-    
+
     up2 = Chain(
-        ConvTranspose((4,4), 256 => 128, stride=2, pad=1),
-        (x) -> x[:, :, 1:32, 1:32],
-        (x, skip) -> cat(x, skip; dims=3),
-        Conv((3,3), 256 => 128, pad=1),
+        ConvTranspose((4,4), 256 => 128, stride=2, pad=1),  # 16x16 -> 32x32
+        (x, skip) -> begin
+            skip = center_crop(skip, size(x)[1:2])
+            cat(x, skip; dims=3)
+        end,
+        Conv((3,3), 256 => 128, pad=SamePad()),
         BatchNorm(128),
         x -> relu.(x)
     ) |> f32
-    
+
     # Final convolution
     final = Conv((1,1), 128 => out_ch) |> f32
-    
+
     # Time embedding
     time_embed = Chain(
         Dense(1, time_dim),
         x -> relu.(x),
         Dense(time_dim, time_dim)
     ) |> f32
-    
+
     return (x, t) -> begin
         t_emb = time_embed(reshape(t, 1, :))
         
         # Encoder
-        x1 = conv0(x)
-        x2 = down1(x1)
-        x3 = down2(x2)
+        x1 = conv0(x)        # 32x32
+        x2 = down1(x1)       # 16x16
+        x3 = down2(x2)       # 8x8
         
         # Bottleneck
-        x4 = bottleneck(x3)
+        x4 = bottleneck(x3)  # 8x8
         
-        # Decoder with skip connections
+        # Decoder
         x_up = up1[1](x4)
-        x_up = up1[2](x_up)
-        x_up = up1[3](x_up, x3)
-        x_up = up1[4:end](x_up)
+        x_up = up1[2](x_up, x2)
+        x_up = up1[3:end](x_up)
         
         x_up = up2[1](x_up)
-        x_up = up2[2](x_up)
-        x_up = up2[3](x_up, x1)
-        x_up = up2[4:end](x_up)
+        x_up = up2[2](x_up, x1)
+        x_up = up2[3:end](x_up)
         
         return final(x_up)
     end
+end
+
+# Helper function for center cropping
+function center_crop(x, new_size)
+    h, w = size(x)[1:2]
+    new_h, new_w = new_size
+    h_start = div(h - new_h, 2) + 1
+    w_start = div(w - new_w, 2) + 1
+    return x[h_start:h_start+new_h-1, w_start:w_start+new_w-1, :, :]
 end
 
 """
