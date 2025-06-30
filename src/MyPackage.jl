@@ -8,7 +8,7 @@ using ProgressMeter: @showprogress
 using MAT
 using Statistics
 
-
+f32(x) = Flux.f32(x)
 
 # Define the model globally with Float32 types
 const model = Chain(
@@ -25,7 +25,7 @@ Loads the digits data and generates grid
 function generate_grid()
     data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
     raw = data["syntheticImages"]        
-    images = reshape(raw, 32, 32, 500)     
+    images = Float32.(reshape(raw, 32, 32, 1, 500))   
 
     first64 = images[:, :, 1:64]
     img_size = size(first64, 1), size(first64, 2)
@@ -72,7 +72,6 @@ function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0
 
     return img  
 end
-
 
 
 """
@@ -199,7 +198,7 @@ function up_block(in_ch, out_ch, time_dim)
     end
 end
 
-
+"""
 function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
     conv0 = Conv((3,3), in_ch => 128, pad=1)
 
@@ -233,6 +232,91 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
         x = up2(x, skip2, t_emb)
         x = up3(x, skip1, t_emb)
         return final(x)
+    end
+end
+"""
+
+function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
+    # Initial convolution
+    conv0 = Conv((3,3), in_ch => 64, pad=1) |> f32
+    
+    # Downsample path
+    down1 = Chain(
+        Conv((3,3), 64 => 128, pad=1),
+        BatchNorm(128),
+        x -> relu.(x),
+        Conv((4,4), 128 => 128, stride=2, pad=1)
+    ) |> f32
+    
+    down2 = Chain(
+        Conv((3,3), 128 => 256, pad=1),
+        BatchNorm(256),
+        x -> relu.(x),
+        Conv((4,4), 256 => 256, stride=2, pad=1)
+    ) |> f32
+    
+    # Bottleneck
+    bottleneck = Chain(
+        Conv((3,3), 256 => 512, pad=1),
+        BatchNorm(512),
+        x -> relu.(x),
+        Conv((3,3), 512 => 512, pad=1),
+        BatchNorm(512),
+        x -> relu.(x)
+    ) |> f32
+    
+    # Upsample path with skip connections
+    up1 = Chain(
+        ConvTranspose((4,4), 512 => 256, stride=2, pad=1),
+        (x) -> x[:, :, 1:32, 1:32],  # Simple cropping
+        (x, skip) -> cat(x, skip; dims=3),
+        Conv((3,3), 512 => 256, pad=1),
+        BatchNorm(256),
+        x -> relu.(x)
+    ) |> f32
+    
+    up2 = Chain(
+        ConvTranspose((4,4), 256 => 128, stride=2, pad=1),
+        (x) -> x[:, :, 1:32, 1:32],
+        (x, skip) -> cat(x, skip; dims=3),
+        Conv((3,3), 256 => 128, pad=1),
+        BatchNorm(128),
+        x -> relu.(x)
+    ) |> f32
+    
+    # Final convolution
+    final = Conv((1,1), 128 => out_ch) |> f32
+    
+    # Time embedding
+    time_embed = Chain(
+        Dense(1, time_dim),
+        x -> relu.(x),
+        Dense(time_dim, time_dim)
+    ) |> f32
+    
+    return (x, t) -> begin
+        t_emb = time_embed(reshape(t, 1, :))
+        
+        # Encoder
+        x1 = conv0(x)
+        x2 = down1(x1)
+        x3 = down2(x2)
+        
+        # Bottleneck
+        x4 = bottleneck(x3)
+        
+        # Decoder with skip connections
+        x_up = up1[1](x4)
+        x_up = up1[2](x_up)
+        x_up = up1[3](x_up, x3)
+        x_up = up1[4:end](x_up)
+        
+        x_up = up2[1](x_up)
+        x_up = up2[2](x_up)
+        x_up = up2[3](x_up, x1)
+        x_up = up2[4:end](x_up)
+        
+        return final(x_up)
     end
 end
 
@@ -269,33 +353,33 @@ Trains the U-Net model on the specified dataset.
 function train_model(; dataset::Symbol, epochs::Int=10, batch_size::Int=32, learning_rate::Float64=1e-4, model_save_path::String="unet_model.bson")
 
     loader = get_data(dataset, batch_size)
+    loader = (Float32.(x) for x in loader)
     
-    unet = build_unet()
+    unet = build_unet() |> f32
 
     
     function loss(unet_model, x_clean)
-        t = Float32.(rand(1:500, size(x_clean)[4])) 
-        noise = randn(size(x_clean))
+        batch_size = size(x_clean, 4)
+        t = rand(1:500, batch_size)
+        noise = randn(Float32,size(x_clean))
         
         
-        noisy_image = sqrt(0.8) .* x_clean .+ sqrt(0.2) .* noise 
-        
+        noisy_image = sqrt(0.8f0) .* x_clean .+ sqrt(0.2f0) .* noise 
         predicted_noise = unet_model(noisy_image, Float32.(t))
-        return Flux.Losses.mse(predicted_noise, noise)
+        return Flux.mse(predicted_noise, noise)
     end
     
     opt = ADAM(learning_rate)
 
    
     @info "Starting training on '$dataset' for $epochs epochs..."
+    ps = Flux.params(unet)
     for epoch in 1:epochs
         @showprogress "Epoch $epoch " for x_clean in loader
-        
-            grads = Flux.gradient(() -> loss(unet, x_clean), Flux.params(unet))
-            Flux.Optimise.update!(opt, Flux.params(unet), grads)        
+            x_clean = Float32.(x_clean) 
+            gs = gradient(() -> loss(unet, x_clean), ps)
+            Flux.update!(opt, ps, gs)        
         end
-        
-        
         first_batch = first(loader)
         current_loss = loss(unet, first_batch)
         @info "Epoch: $epoch | Loss: $current_loss"
@@ -321,14 +405,14 @@ function test_model(model_path::String="unet_model.bson"; output_filename::Strin
 
 
     @info "Generating image from noise..."
-    img = cpu(randn(Float32, 32, 32, 1, 1)) 
+    img = randn(Float32, 32, 32, 1, 1)
     
 
     @showprogress "Denoising " for t in reverse(1:num_denoising_steps)
         t_vec = fill(Float32(t), 1)  
         predicted_noise = unet(img, t_vec)
 
-        img = (img .- sqrt(0.2) .* predicted_noise) ./ sqrt(0.8)
+        img = (img .- sqrt(0.2f0) .* predicted_noise) ./ sqrt(0.8f0)
     end
 
     generated_img = clamp01.(img[:,:,1,1])
