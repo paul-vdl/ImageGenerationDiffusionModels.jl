@@ -1,12 +1,18 @@
 module MyPackage
 
-using MAT
-using Images
-using FileIO
+using MLDatasets
 using Flux
+using Flux: @functor, chunk, params
+using Parameters: @with_kw
+using BSON
+using Images
+using Logging: with_logger
+using ProgressMeter: Progress, next!
+using TensorBoardLogger: TBLogger, tb_overwrite
+using Random
+using Statistics
 
 using NNlib: pad
-using Statistics: mean
 
 
 
@@ -101,67 +107,6 @@ end
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
 """
-"""
-Identical training loop from the example code.
-Uses score-matching loss and the same optimizer setup.
-"""
-function train_brain(; kws...)
-    # --- Hyperparameters (copied exactly) ---
-    args = (;
-        η = 1e-4,        # learning rate
-        batch_size = 32, # batch size
-        epochs = 50,     # number of epochs
-        seed = 1,        # random seed
-        cuda = false,    # use CPU (since you don't have GPU)
-        verbose_freq = 10,
-        save_path = "output"
-    )
-
-    Random.seed!(args.seed)
-    device = cpu  # Force CPU
-
-    # --- Data Loading (adapted to your dataset) ---
-    data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
-    raw = data["syntheticImages"]
-    xtrain = Float32.(reshape(raw, 32, 32, 1, 500))  # Reshape to WHCN format
-    loader = Flux.DataLoader(xtrain, batchsize=args.batch_size, shuffle=true)
-
-    # --- Model Setup (use your U-Net) ---
-    model = build_unet() |> device
-    opt = ADAM(args.η)
-    ps = Flux.params(model)
-
-    # --- Training Loop (identical to example) ---
-    @info "Start Training, total $(args.epochs) epochs"
-    for epoch in 1:args.epochs
-        for x in loader
-            x = device(x)
-            loss, grad = Flux.withgradient(ps) do
-                # Score-matching loss from example
-                batch_size = size(x)[end]
-                random_t = rand(Float32, batch_size) .* (1.0f0 - 1.0f-5) .+ 1.0f-5
-                z = randn(Float32, size(x))
-                std = reshape(marginal_prob_std(random_t), 1, 1, 1, :)
-                perturbed_x = x + z .* std
-                score = model(perturbed_x, random_t)
-                mean(sum((score .* std .+ z).^2; dims=1:3))
-            end
-            Flux.update!(opt, ps, grad)
-        end
-        @info "Epoch $epoch" loss=loss
-    end
-
-    # Save model (optional)
-    !ispath(args.save_path) && mkpath(args.save_path)
-    model_path = joinpath(args.save_path, "model.bson")
-    BSON.@save model_path model
-    @info "Model saved: $(model_path)"
-end
-
-# Add marginal_prob_std (required for training)
-function marginal_prob_std(t, sigma=25.0f0)
-    sqrt.((sigma.^(2t) .- 1.0f0) ./ (2.0f0 * log(sigma))
-end
 
 """
     function generate_image_from_noise()
@@ -174,7 +119,7 @@ function generate_image_from_noise()
     return generated_img  # Return the generated image
 end
 
-function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
+function sinusoidal_embedding(t::AbstractArray, dim::Int)
     half_dim = div(dim, 2)
     emb = log(10000.0) / (half_dim - 1)
     emb = exp.((-emb) .* (0:half_dim - 1))
@@ -271,8 +216,74 @@ function get_data(batch_size)
 end
 
 
+"""
+Identical training loop from the example code.
+Uses score-matching loss and the same optimizer setup.
+"""
+function train_brain(; kws...)
+    # --- Hyperparameters (copied exactly) ---
+    args = (;
+        η = 1e-4,        # learning rate
+        batch_size = 32, # batch size
+        epochs = 50,     # number of epochs
+        seed = 1,        # random seed
+        cuda = false,    # use CPU (since you don't have GPU)
+        verbose_freq = 10,
+        save_path = "output"
+    )
+
+    Random.seed!(args.seed)
+    device = cpu  # Force CPU
+
+    # --- Data Loading (adapted to your dataset) ---
+    data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
+    raw = data["syntheticImages"]
+    xtrain = Float32.(reshape(raw, 32, 32, 1, 500))  # Reshape to WHCN format
+    batches = [xtrain[:,:,:,i:min(i+args.batch_size-1, end)] 
+           for i in 1:args.batch_size:size(xtrain,4)]
+
+    # --- Model Setup (use your U-Net) ---
+    model = build_unet() |> device
+    opt = ADAM(args.η)
+    ps = Flux.params(model)
+
+    # --- Training Loop (identical to example) ---
+    @info "Start Training, total $(args.epochs) epochs"
+    for epoch in 1:args.epochs
+        for x in loader
+            x = device(x)
+            loss, grad = Flux.withgradient(ps) do
+                # Score-matching loss from example
+                batch_size = size(x)[end]
+                random_t = rand(Float32, batch_size) .* (1.0f0 - 1.0f-5) .+ 1.0f-5
+                z = randn(Float32, size(x))
+                std = reshape(marginal_prob_std(random_t), 1, 1, 1, :)
+                perturbed_x = x + z .* std
+                score = model(perturbed_x, random_t)
+                mean(sum((score .* std .+ z).^2; dims=1:3))
+            end
+            Flux.update!(opt, ps, grad)
+        end
+        @info "Epoch $epoch" loss=loss
+    end
+
+    # Save model (optional)
+    !ispath(args.save_path) && mkpath(args.save_path)
+    model_path = joinpath(args.save_path, "model.bson")
+    BSON.@save model_path model
+    @info "Model saved: $(model_path)"
+end
+
+# Add marginal_prob_std (required for training)
+function marginal_prob_std(t, sigma=25.0f0)
+    sqrt.((sigma.^(2t) .- 1.0f0) ./ (2.0f0 * log(sigma)))
+end
+
+
+
 
 
 
 end  # End of module MyPackage
 
+MyPackage.train_brain()
