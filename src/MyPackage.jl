@@ -1,12 +1,12 @@
 module MyPackage
 
-using MAT
-using Images
-using FileIO
 using Flux
-
-using NNlib: pad
-using Statistics: mean
+using MLDatasets
+using BSON: @save, @load
+using Images, ImageIO, FileIO
+using ProgressMeter: @showprogress
+using MAT
+using Statistics
 
 
 
@@ -81,8 +81,9 @@ end
 Denoises a noisy image using the trained neural network 'model'.
 Given a single input `noisy_img::Matrix{<:Real}`, this function produces
 a denoised version of that input file"""
+flatten32(mat) = reshape(Float32.(mat), :, 1)
 function denoise_image(noisy_img::AbstractMatrix{<:Real})
-  flatten32(mat) = reshape(Float32.(mat), :, 1)
+  
   # Denoise the user’s single image
   x_input = flatten32(noisy_img)
   y_pred  = model(x_input)
@@ -101,6 +102,7 @@ end
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
 """
+flatten32(mat) = reshape(Float32.(mat), :, 1)
 function train_brain(num_steps::Int=500)
   # 1) Load the clean images
   data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
@@ -112,7 +114,7 @@ function train_brain(num_steps::Int=500)
   noisy_images = [apply_noise(clean_images[i]) for i in 1:500]
 
   # 3) Flatten to Float32 column‐vectors
-  flatten32(mat) = reshape(Float32.(mat), :, 1)
+  
   clean_vecs = map(flatten32, clean_images)
   noisy_vecs = map(flatten32, noisy_images)
 
@@ -120,7 +122,7 @@ function train_brain(num_steps::Int=500)
   data_pairs = zip(noisy_vecs, clean_vecs)
 
   # 5) Set up the optimizer with state
-  opt = Flux.setup(ADAM(), model)
+  opt = ADAM()
 
   # 6) Define loss
   loss(model, x, y) = Flux.Losses.mse(model(x), y)
@@ -173,7 +175,7 @@ function down_block(in_ch, out_ch, time_dim)
 
     return (x, t_emb) -> begin
         h = conv1(x)
-        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
+        t_proj = permutedims(reshape(t_proj, (size(t_proj, 2), 1, 1, size(t_proj, 1))), (4,1,2,3))
         h = h .+ permutedims(t_proj, (4,1,2,3))
         h = conv2(h)
         return downsample(h), h
@@ -235,17 +237,134 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
 end
 
 """
-Helper function that loads MNIST images and returns loader.
+    get_data(dataset::Symbol, batch_size::Int)
+
+Returns a Flux.DataLoader for the specified dataset.
+`:mnist` loads the MNIST dataset.
+`:synthetic` loads the 'SyntheticImages500.mat' dataset.
 """
-function get_data(batch_size)
-    xtrain, ytrain = MLDatasets.MNIST(:train)[:]
-    xtrain = reshape(xtrain, 28, 28, 1, :)
-    DataLoader((xtrain, ytrain), batchsize=batch_size, shuffle=true)
+function get_data(dataset::Symbol, batch_size::Int)
+    if dataset == :mnist
+        @info "Loading MNIST dataset..."
+        xtrain, _ = MLDatasets.MNIST(:train)[:]
+        # Pad MNIST images from 28x28 to 32x32 to match synthetic data
+        xtrain_padded = padarray(reshape(xtrain, 28, 28, 1, :), Pad(:circular, (2, 2)))
+        return Flux.DataLoader(xtrain_padded, batchsize=batch_size, shuffle=true)
+    elseif dataset == :synthetic
+        @info "Loading synthetic dataset..."
+        data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
+        raw = data["syntheticImages"]
+        images = reshape(raw, 32, 32, 1, 500) # Add channel dimension
+        return Flux.DataLoader(Float32.(images), batchsize=batch_size, shuffle=true)
+    else
+        throw(ArgumentError("Unsupported dataset: $dataset. Use :mnist or :synthetic."))
+    end
+end
+
+"""
+    train_model(; dataset::Symbol, epochs::Int, batch_size::Int, learning_rate::Float64, model_save_path::String="unet_model.bson")
+
+Trains the U-Net model on the specified dataset.
+"""
+function train_model(; dataset::Symbol, epochs::Int=10, batch_size::Int=32, learning_rate::Float64=1e-4, model_save_path::String="unet_model.bson")
+
+    loader = get_data(dataset, batch_size)
+    
+    unet = build_unet()
+
+    
+    function loss(unet_model, x_clean)
+        t = Float32.(rand(1:500, size(x_clean)[4])) 
+        noise = randn(size(x_clean))
+        
+        
+        noisy_image = sqrt(0.8) .* x_clean .+ sqrt(0.2) .* noise 
+        
+        predicted_noise = unet_model(noisy_image, Float32.(t))
+        return Flux.Losses.mse(predicted_noise, noise)
+    end
+    
+    opt = ADAM(learning_rate)
+
+   
+    @info "Starting training on '$dataset' for $epochs epochs..."
+    for epoch in 1:epochs
+        @showprogress "Epoch $epoch " for x_clean in loader
+        
+            grads = Flux.gradient(() -> loss(unet, x_clean), Flux.params(unet))
+            Flux.Optimise.update!(opt, Flux.params(unet), grads)        
+        end
+        
+        
+        first_batch = first(loader)
+        current_loss = loss(unet, first_batch)
+        @info "Epoch: $epoch | Loss: $current_loss"
+    end
+    
+
+    @info "Training complete. Saving model to $model_save_path"
+
+    unet_cpu = cpu(unet)
+    @save model_save_path unet_cpu
+end
+
+"""
+    test_model(model_path::String="unet_model.bson"; output_filename::String="generated_image.png")
+
+Loads a trained U-Net model and uses it to generate an image from pure noise.
+"""
+function test_model(model_path::String="unet_model.bson"; output_filename::String="generated_image.png", num_denoising_steps::Int=200)
+
+    @info "Loading model from $model_path"
+    @load model_path unet_cpu
+    unet = unet_cpu 
+
+
+    @info "Generating image from noise..."
+    img = cpu(randn(Float32, 32, 32, 1, 1)) 
+    
+
+    @showprogress "Denoising " for t in reverse(1:num_denoising_steps)
+        t_vec = fill(Float32(t), 1)  
+        predicted_noise = unet(img, t_vec)
+
+        img = (img .- sqrt(0.2) .* predicted_noise) ./ sqrt(0.8)
+    end
+
+    generated_img = clamp01.(img[:,:,1,1])
+    save(output_filename, colorview(Gray, generated_img))
+    @info "Generated image saved to $output_filename"
 end
 
 
+"""
+    main()
+
+Main function to run training and testing.
+Parses command-line arguments to select the dataset.
+"""
+function main()
+
+    dataset = :mnist 
+    if "synthetic" in ARGS
+        dataset = :synthetic
+    end
+
+    println("--- Starting Diffusion Model Pipeline ---")
+    println("Selected Dataset: $dataset")
+    
+
+    train_model(dataset=dataset, epochs=20, batch_size=64, learning_rate=1e-3)
+    
+
+    test_model()
+
+    println("--- Pipeline Finished ---")
+end
 
 
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end
 
 end  # End of module MyPackage
-
