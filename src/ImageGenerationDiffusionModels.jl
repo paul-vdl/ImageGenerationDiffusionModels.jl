@@ -1,4 +1,4 @@
-module MyPackage
+module ImageGenerationDiffusionModels
 
 using MAT
 using Images
@@ -247,5 +247,5 @@ end
 
 
 
-end  # End of module MyPackage
+end  # End of module ImageGenerationDiffusionModels
 

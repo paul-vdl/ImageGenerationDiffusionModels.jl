@@ -71,6 +71,6 @@ jobs:
         shell: julia --project=docs --color=yes {0}
         run: |
           using Documenter: DocMeta, doctest
-          using MyPackage
-          DocMeta.setdocmeta!(MyPackage, :DocTestSetup, :(using MyPackage); recursive=true)
-          doctest(MyPackage)
+          using ImageGenerationDiffusionModels
+          DocMeta.setdocmeta!(ImageGenerationDiffusionModels, :DocTestSetup, :(using ImageGenerationDiffusionModels); recursive=true)
+          doctest(ImageGenerationDiffusionModels)

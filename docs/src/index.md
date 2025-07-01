@@ -1,14 +1,14 @@
 ```@meta
-CurrentModule = MyPackage
+CurrentModule = ImageGenerationDiffusionModels
 ```
 
-# MyPackage
+# ImageGenerationDiffusionModels
 
-Documentation for [MyPackage](https://github.com/paul-vdl/MyPackage.jl).
+Documentation for [ImageGenerationDiffusionModels](https://github.com/paul-vdl/ImageGenerationDiffusionModels.jl).
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [MyPackage]
+Modules = [ImageGenerationDiffusionModels]
 ```

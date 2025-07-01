@@ -1,14 +1,14 @@
-using MyPackage
+using ImageGenerationDiffusionModels
 using Documenter
 
-DocMeta.setdocmeta!(MyPackage, :DocTestSetup, :(using MyPackage); recursive=true)
+DocMeta.setdocmeta!(ImageGenerationDiffusionModels, :DocTestSetup, :(using ImageGenerationDiffusionModels); recursive=true)
 
 makedocs(;
-    modules=[MyPackage],
+    modules=[ImageGenerationDiffusionModels],
     authors="Paul Vidal <p.vidal@campus.tu-berlin.de>",
-    sitename="MyPackage.jl",
+    sitename="ImageGenerationDiffusionModels.jl",
     format=Documenter.HTML(;
-        canonical="https://paul-vdl.github.io/MyPackage.jl",
+        canonical="https://paul-vdl.github.io/ImageGenerationDiffusionModels.jl",
         edit_link="master",
         assets=String[],
     ),
@@ -18,6 +18,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/paul-vdl/MyPackage.jl",
-    devbranch="master",
+    repo="github.com/paul-vdl/ImageGenerationDiffusionModels.jl",
+    devbranch="main",
 )

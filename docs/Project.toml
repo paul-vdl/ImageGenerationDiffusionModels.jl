@@ -1,4 +1,4 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-MyPackage = "7eca0ff8-e3a3-4c84-9005-98dfb23f45a7"
+ImageGenerationDiffusionModels = "7eca0ff8-e3a3-4c84-9005-98dfb23f45a7"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
