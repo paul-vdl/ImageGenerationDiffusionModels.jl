@@ -125,7 +125,7 @@ Trains neural network model to denoise images
 - Denoised image after the steps
 """
 
-function train_brain(num_steps::Int=500)
+function train_brain(num_steps::Int=100)
   # 1) Load the clean images
   data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
   raw  = data["syntheticImages"]          # size (32,32,1,500)
