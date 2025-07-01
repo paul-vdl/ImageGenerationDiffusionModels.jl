@@ -18,7 +18,7 @@ const model = Chain(
 
 
 """
-    function generate_grid()
+    generate_grid()
 
 Loads the digits data and generates grid
 """
@@ -43,20 +43,19 @@ function generate_grid()
 end
 
 """
-    function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
+    apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
 
 Applies forward-noise to an image
 This function adds Gaussian noise to an image during multiple steps, which corresponds to the forward process in diffusion models.
 
-#Arguments
-- 'img' : The input image
-- 'num_noise_steps' : number of steps over which noise should be added to the image (500 by default).
-- 'beta_min': Minimum beta value (0.0001 by default)
-- 'beta_max': Maximum beta value (0.02 by default)
+# Arguments
+- `img` : The input image
+- `num_noise_steps`: number of steps over which noise should be added to the image (500 by default).
+- `beta_min`: Minimum beta value (0.0001 by default)
+- `beta_max`: Maximum beta value (0.02 by default)
 
-#Returns
+# Returns
 - An image with noise
-
 """
 function apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)
     
@@ -76,11 +75,18 @@ end
 
 
 """
-    function denoise_image(noisy_img)
+    denoise_image(noisy_img)
 
 Denoises a noisy image using the trained neural network 'model'.
 Given a single input `noisy_img::Matrix{<:Real}`, this function produces
-a denoised version of that input file"""
+a denoised version of that input file
+
+# Arguments
+- `noisy_img::Matrix{<:Real}`: noisy image
+
+# Returns
+- A denoised version of the image
+"""
 function denoise_image(noisy_img::AbstractMatrix{<:Real})
   flatten32(mat) = reshape(Float32.(mat), :, 1)
   # Denoise the user’s single image
@@ -95,13 +101,31 @@ end
 """
     denoise_image(noisy_img; num_steps=500)
 
-
-
   1. loads the clean 32×32 images,
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
+
+# Arguments
+- `noisy_img::Matrix{<:Real}`: noisy image
+- `num_steps::Int=500`: number of steps
+
+# Returns
+- Denoised image after the steps
 """
-function train_brain(num_steps::Int=500)
+
+"""
+    train_brain(num_steps::Int=500)
+
+Trains neural network model to denoise images
+
+# Arguments
+- `num_steps::Int=500`: number of steps
+
+# Returns
+- Denoised image after the steps
+"""
+
+function train_brain(num_steps::Int=100)
   # 1) Load the clean images
   data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
   raw  = data["syntheticImages"]          # size (32,32,1,500)
@@ -137,7 +161,7 @@ function train_brain(num_steps::Int=500)
 end #end train_brain
 
 """
-    function generate_image_from_noise()
+    generate_image_from_noise()
 
 Generates a new image from random noise and denoises it.
 """
@@ -147,6 +171,18 @@ function generate_image_from_noise()
     return generated_img  # Return the generated image
 end
 
+"""
+    sinusoidal_embedding(t::Vector{Float32}, dim::Int)
+
+Generates sinusoidal positional embeddings from a vector of scalar inputs, typically used to encode time steps or sequence positions
+
+# Arguments
+- `t::Vector{Float32}`: A vector of time or position values
+- `dim::Int`: The desired embedding dimensionality
+
+# Returns
+- A matrix of shape `(length(t), dim)` where each row is the embedding of one time step
+"""
 function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
     half_dim = div(dim, 2)
     emb = log(10000.0) / (half_dim - 1)
@@ -156,6 +192,19 @@ function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
     return emb
 end
 
+"""
+    pad_or_crop(x, ref)
+
+Pads or crops the input tensor `x` so that its dimensions match those of `ref`
+
+# Arguments
+- `x`: A 4D tensor, typically shaped `(C, H, W, N)`
+- `ref`: A reference tensor whose spatial size `(H, W)` `x` should match
+
+# Returns
+- A tensor with the same number of channels and batch size as `x`,
+  but with height and width adjusted to match `ref`
+"""
 function pad_or_crop(x, ref)
     _, _, h1, w1 = size(x)
     _, _, h2, w2 = size(ref)
@@ -165,6 +214,23 @@ function pad_or_crop(x, ref)
     return x[:, :, 1:h2, 1:w2]
 end
 
+"""
+    down_block(in_ch, out_ch, time_dim)
+
+Creates a downsampling block for the U-Net
+
+# Arguments
+- `in_ch::Int`: Number of input channels
+- `out_ch::Int`: Number of output channels
+- `time_dim::Int`: Dimensionality of the time embedding vector used for conditioning
+
+# Returns
+- A callable function `(x, t_emb) -> (down, skip)`, where:
+  - `x`: Input feature map
+  - `t_emb`: Time embedding vector for the current step
+  - `down`: Downsampled feature map for the next layer
+  - `skip`: Intermediate feature map
+"""
 function down_block(in_ch, out_ch, time_dim)
     conv1 = Chain(Conv((3,3), in_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
     conv2 = Chain(Conv((3,3), out_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
@@ -180,6 +246,23 @@ function down_block(in_ch, out_ch, time_dim)
     end
 end
 
+"""
+    up_block(in_ch, out_ch, time_dim)
+
+Creates an upsampling block used in U-Net
+
+# Arguments
+- `in_ch::Int`: Number of input channels to the block
+- `out_ch::Int`: Number of output channels after the convolutions
+- `time_dim::Int`: Dimensionality of the time embedding vector
+
+# Returns
+- A callable function `(x, skip, t_emb) -> output`, where:
+    - `x`: The upsampled feature map from the previous layer
+    - `skip`: The skip connection feature map from the encoder
+    - `t_emb`: The time embedding vector for the current step
+    - The output is a feature map with `out_ch` channels
+"""
 function up_block(in_ch, out_ch, time_dim)
     upsample = ConvTranspose((4,4), in_ch => in_ch, stride=2, pad=1)
     conv1 = Chain(Conv((3,3), in_ch + div(in_ch,2) => out_ch, pad=1), BatchNorm(out_ch), relu)
@@ -197,7 +280,22 @@ function up_block(in_ch, out_ch, time_dim)
     end
 end
 
+"""
+    build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
 
+Builds a time-conditioned U-Net model for image denoising and generation in diffusion models
+
+# Arguments
+- `in_ch::Int=1`: Number of unput channels(1 is for grayscale)
+- `out_ch::Int=1`: Number of output channels(1 is for grayscale)
+- `time_dim::Int=256`: Dimensionality of the time embedding vector used for condition
+
+# Returns
+- A callable function `(x, t_vec) -> output`, where:
+    - `x`: Input image
+    - `t_vec`: time step vector
+    - `output`: tensor of same dimensions as `out_ch` channels
+""" 
 function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
     conv0 = Conv((3,3), in_ch => 128, pad=1)
 
@@ -235,7 +333,12 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
 end
 
 """
+    get_data(batch_size)
+
 Helper function that loads MNIST images and returns loader.
+
+# Arguments
+- `batch_size::Int`: size of batch
 """
 function get_data(batch_size)
     xtrain, ytrain = MLDatasets.MNIST(:train)[:]
