@@ -39,3 +39,6 @@ using ImageGenerationDiffusionModels
 
 img = ImageGenerationDiffusionModels.generate_grid()
 noisy_img = ImageGenerationDiffusionModels.apply_noise(img)
+ImageGenerationDiffusionModels.train_brain()
+denoised_img = ImageGenerationDiffusionModels.denoise_image(img[1:32, 1:32])
+new_img = ImageGenerationDiffusionModels.generate_image_from_noise()
