@@ -19,7 +19,7 @@ The model learns to generate a clear image from random noise.
 - `ImageGenerationDiffusionModels.apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)`  
   Applies Gaussian noise to an image array gradually. Produces `noisy_img.png` and returns the noisy array.
 
-- `ImageGenerationDiffusionModels.train_brain(num_steps::Int = 500)`  
+- `ImageGenerationDiffusionModels.train_brain(num_steps::Int = 100)`  
   Trains the model to map noisy → clean images.
 
 - `ImageGenerationDiffusionModels.denoise_image(noisy_img::AbstractMatrix{<:Real})`  
@@ -36,9 +36,20 @@ Here's a quick example to get started:
 
 ```julia
 using ImageGenerationDiffusionModels
-
-img = ImageGenerationDiffusionModels.generate_grid()
-noisy_img = ImageGenerationDiffusionModels.apply_noise(img)
-ImageGenerationDiffusionModels.train_brain()
-denoised_img = ImageGenerationDiffusionModels.denoise_image(img[1:32, 1:32])
-new_img = ImageGenerationDiffusionModels.generate_image_from_noise()
+```
+```julia
+img = generate_grid()
+```
+```julia
+noisy_img = apply_noise(img)
+```
+```julia
+train_brain()
+```
+```julia
+denoised_img = denoise_image(img[1:32, 1:32])
+```
+```julia
+new_img = generate_image_from_noise()
+```
+! The two last functions create a png with the same name so you can only see one at the time
