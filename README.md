@@ -35,9 +35,10 @@ The model learns to generate a clear image from random noise.
 Here's a quick example to get started:
 
 In Pkg-mode:
-```julia pkg
+```
 add https://github.com/paul-vdl/ImageGenerationDiffusionModels.jl
 ```
+Then in REPL:
 ```julia
 using ImageGenerationDiffusionModels
 ```
