@@ -5,7 +5,7 @@ using Images
 using FileIO
 using Flux
 
-using NNlib: pad
+using NNlib
 using Statistics: mean
 
 
