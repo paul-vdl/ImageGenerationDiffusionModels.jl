@@ -245,7 +245,6 @@ end
 
 
 
-
+export generate_grid, apply_noise, train_brain, denoise_image, generate_image_from_noise
 
 end  # End of module ImageGenerationDiffusionModels
-
