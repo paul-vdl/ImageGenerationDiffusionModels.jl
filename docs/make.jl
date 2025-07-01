@@ -19,5 +19,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/paul-vdl/ImageGenerationDiffusionModels.jl",
-    devbranch="main",
+    devbranch="gh-pages",
 )
