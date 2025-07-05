@@ -102,7 +102,7 @@ end
   2. creates noisy versions of all of them,
   3. trains `model` to map noisy→clean by MSE
 """
-function train_brain(num_steps::Int=500)
+function train_brain(num_steps::Int=5)
   # 1) Load the clean images
   data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
   raw  = data["syntheticImages"]          # size (32,32,1,500)
@@ -184,23 +184,17 @@ end
 
 function up_block(in_ch, out_ch, time_dim)
     upsample = ConvTranspose((4,4), in_ch => in_ch, stride=2, pad=1)
-    conv1 = Chain(Conv((3,3), in_ch + div(in_ch,2) => out_ch, pad=1), BatchNorm(out_ch), relu)
+    conv1 = Chain(Conv((3,3), in_ch  => out_ch, pad=1), BatchNorm(out_ch), relu)
     conv2 = Chain(Conv((3,3), out_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
     time_mlp = Dense(time_dim, out_ch)
 
     return (x, skip, t_emb) -> begin
         x = upsample(x)
-        @info "x", size(x), typeof(x)
         x = pad_or_crop(x, skip)
-        @info "x", size(x), typeof(x)
-        @info "skip", size(skip), typeof(skip)
         x = cat(x, skip; dims=1)
-        @info "x", size(x), typeof(x)
         h = conv1(x)
-        @info "h", size(h), typeof(h)
-        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
-        @info "t_proj", size(t_proj), typeof(t_proj)
-        h = h .+ permutedims(t_proj, (4,1,2,3))
+        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, out_ch)
+        h = h .+ permutedims(t_proj, (1,2,4,3))
         return conv2(h)
     end
 end
@@ -235,14 +229,11 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
         x2, skip2 = down2(x1, t_emb)
         x3, skip3 = down3(x2, t_emb)
         x4 = bottleneck(x3)
-        @info "x4", size(x0), typeof(x4)
         x = up1(x4, skip3, t_emb)
-        @info "x", size(x), typeof(x)
         x = up2(x, skip2, t_emb)
-        @info "x", size(x), typeof(x)
         x = up3(x, skip1, t_emb)
-        @info "x", size(x), typeof(x)
-        return final(x)
+        x = final(x)
+        return x
     end
 end
 
@@ -254,7 +245,6 @@ function get_data(batch_size)
     xtrain = reshape(xtrain, 28, 28, 1, :)
     DataLoader((xtrain, ytrain), batchsize=batch_size, shuffle=true)
 end
-
 
 train_x, train_y = MNIST(split=:train)[:]
 test_x,  test_y  = MNIST(split=:test)[:]
@@ -284,9 +274,13 @@ end
 
 function loss_fn(model, x_0, t, alpha)
     epss = randn(Float32, size(x_0))
+    @info "epss", size(epss), typeof(epss)
     x_t = q_sample(x_0, t, epss, alpha)
+    @info "x_t", size(x_t), typeof(x_t)
     t_vec = reshape(Float32.(t), 1, size(x_0)[end])
+    @info "t_vec", size(t_vec), typeof(t_vec)
     epss_pred = model(x_t, t_vec)
+    @info "epss_pred", size(epss_pred), typeof(epss_pred)
     return mean((epss_pred .- epss).^2)
 end
 
@@ -302,8 +296,11 @@ for epoch in 1:5
     for (i, x_0) in enumerate(train_loader)
         batch_size = size(x_0)[end]
         t = rand(1:num_steps, batch_size)
+        @info "x_0", size(x_0), typeof(x_0)
         loss, grads = Flux.withgradient(m -> loss_fn(m, x_0, t, alpha), model)
+        @info "gradient marche"
         Flux.update!(optim, model, grads[1])
+        @info "update marche"
         push!(losses, loss)
         if isone(i) || iszero(i % 50)
             acc = accuracy(model) * 100
@@ -311,6 +308,7 @@ for epoch in 1:5
         end
     end
 end
+
 
 end  # End of module MyPackage
 
