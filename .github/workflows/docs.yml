@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path="..")); Pkg.instantiate()'
+          julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=".")); Pkg.instantiate()'
 
       - name: Build and deploy docs
         run: |
