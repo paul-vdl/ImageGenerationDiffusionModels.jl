@@ -14,10 +14,11 @@ Ultimately, the model becomes capable of generating a clean image from pure rand
 ## Available Functions
 
 - `ImageGenerationDiffusionModels.generate_grid()`  
-  Imports the image `SyntheticImages500.mat` and converts it to a PNG file (`grid.png`). Also returns an array used by other functions.
+  Imports the image `SyntheticImages500.mat` (original data) and converts it to a PNG file (`grid.png`). Also returns an array used by other functions.
 
 - `ImageGenerationDiffusionModels.apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)`  
   Applies Gaussian noise to an image array gradually. Produces `noisy_img.png` and returns the noisy array.
+  The default values for num_noise_steps, beta_min, and beta_max are based on commonly used settings in the diffusion model literature to ensure stable training denoising performance
 
 - `ImageGenerationDiffusionModels.train_brain(num_steps::Int = 100)`  
   Trains the model to map noisy → clean images.
