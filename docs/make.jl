@@ -8,7 +8,7 @@ makedocs(;
     authors="Paul Vidal <p.vidal@campus.tu-berlin.de>",
     sitename="ImageGenerationDiffusionModels.jl",
     format=Documenter.HTML(;
-        canonical="https://paul-vdl.github.io/ImageGenerationDiffusionModels.jl",
+        canonical="https://paul-vdl.github.io/ImageGenerationDiffusionModels.jl/dev",
         edit_link="master",
         assets=String[],
     ),
@@ -18,6 +18,7 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/paul-vdl/ImageGenerationDiffusionModels.jl",
-    devbranch="gh-pages",
+    repo="github.com/paul-vdl/ImageGenerationDiffusionModels.jl.git",
+    devbranch="main",
+    branch="gh-pages"
 )
