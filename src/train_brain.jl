@@ -24,7 +24,7 @@ const α     = 1 .- β
 const α_cum = accumulate(*, α)    # ᾱ_t = ∏ₛ αₛ
 
 const batch_size = 64
-const epochs     = 2 ##@@@@@
+const epochs     = 100 ##@@@@@
 const lr         = Float32(2e-4)
 
 const patience = 10  # Number of epochs to wait for improvement
@@ -42,8 +42,8 @@ function timestep_embedding(t::Integer; D::Int=D)
   pe = zeros(Float32, D)
   for i in 1:(D ÷ 2)
     div = exp(-log(Float32(1e4)) * (2*(i-1)/(D-1)))
-    pe[2i-1] = sin(t * div)
-    pe[2i  ] = cos(t * div)
+    pe[2*i-1] = sin(t * div)
+    pe[2*i  ] = cos(t * div)
   end
   return pe
 end
