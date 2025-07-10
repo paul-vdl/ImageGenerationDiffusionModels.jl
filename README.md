@@ -5,11 +5,11 @@
 [![Build Status](https://github.com/paul-vdl/ImageGenerationDiffusionModels.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/paul-vdl/ImageGenerationDiffusionModels.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/paul-vdl/ImageGenerationDiffusionModels.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/paul-vdl/ImageGenerationDiffusionModels.jl)
 
-The objective of this package is to generate an image with a diffusion model.  
-We first train a diffusion network to add noise to an existing image and then train it to remove the noise.  
-The model learns to generate a clear image from random noise.
+The objective of this package is to generate images using a diffusion model.
 
----
+We begin by progressively adding Gaussian noise to an input image. Then, we implement a U-Net architecture and train it to predict the noise that was added. This enables the model to learn how to reverse the diffusion process and reconstruct the original image.
+
+Ultimately, the model becomes capable of generating a clean image from pure random noise by denoising it step by step—closely following the typical pipeline used in modern diffusion-based generative models.
 
 ## Available Functions
 
