@@ -3,7 +3,7 @@ module ImageGenerationDiffusionModels
 using MAT
 using Images
 using FileIO
-using Flux
+using Flux 
 
 using NNlib
 using Statistics: mean
