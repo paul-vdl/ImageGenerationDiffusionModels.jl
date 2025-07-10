@@ -1,5 +1,3 @@
-## Getting Started
-
 Here's a quick example to get started:
 
 In Pkg-mode:
@@ -25,4 +23,4 @@ denoised_img = denoise_image(img[1:32, 1:32])
 ```julia
 new_img = generate_image_from_noise()
 ```
-! The last two functions create a png with the same name so you can only see one at the time
+The last two functions create a png with the same name so you can only see one at the time !
