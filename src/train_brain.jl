@@ -38,6 +38,19 @@ device(x) = x
 # =================================================
 # 3) Sinusoidal timestep embedding
 # =================================================
+
+"""
+    timestep_embedding(t::Integer; D::Int=D)
+
+Generates a sinusoidal timestep embedding of dimension D
+
+# Arguments:
+- `t::Int`: Timestep index
+- `D::Int`: Dimensioin of the embedding
+
+# Returns
+- A vector of length D containg sinusoidal embeddings
+"""
 function timestep_embedding(t::Integer; D::Int=D)
   pe = zeros(Float32, D)
   for i in 1:(D ÷ 2)
@@ -52,10 +65,23 @@ Zygote.@nograd timestep_embedding
 # =================================================
 # 4) A small U-Net definition
 # =================================================
+
+"""
+    ConvBlock(ch_in, ch_out)
+
+Constructs a convolutional block consisting of two sequential convolutional layers
+
+# Arguments
+- `ch_in::Int`: number of input channels
+- `ch_out::Int`: number of output channels
+
+# Returns 
+- Convolutional block
+"""
 function ConvBlock(ch_in, ch_out)
   Chain(
     Conv((3,3), ch_in=>ch_out, pad=1), BatchNorm(ch_out), x->relu.(x),
-    Conv((3,3), ch_out=>ch_out, pad=1), BatchNorm(ch_out), x->relu.(x),
+    Conv((3,3), ch_out=>ch_out, pad=1), BatchNorm(ch_out), x->relu.(x)
   )
 end
 
@@ -69,8 +95,17 @@ struct SimpleUNet
     final::Conv
 end
 
+"""
+    SimpleUNet(channels::Int=1) 
 
+Constructs a simple U-Net model
 
+# Arguments
+- `channels::Int`: number of input channels
+
+# Returns 
+- `SimpleUNet :: Struct`
+"""
 function SimpleUNet(channels::Int=1)
     down1 = Chain(
         Conv((3,3), channels + D => 64, pad=1),
@@ -109,7 +144,18 @@ function SimpleUNet(channels::Int=1)
     SimpleUNet(down1, down2, mid, up2, up1, final)
 end
 
+"""
 
+    (m::SimpleUNet)(x_and_emb)
+
+Applies the forward pass of the 'SimpleUNet' to a noisy image
+
+# Arguments
+- `x_and_emb`: a tuple containg the input image batch and a timestep embedding
+
+# Returns
+- A 4-dimensional array
+"""
 function (m::SimpleUNet)(x_and_emb)
     x, t_emb = x_and_emb
     B = size(x,4)
@@ -135,6 +181,19 @@ end
 # =================================================
 # 5) Data loader
 # =================================================
+
+"""
+    batch_iterator(imgs::Array{Float32,4}, bs::Int)
+
+
+Provides an iterator over random mini batches of images   
+# Arguments
+- `imgs::Array{Float32,4}`: 4-dimensional array of images
+- `bs::Int`: batch size
+
+# Returns
+- A `Channel` that yiels batches
+"""
 function batch_iterator(imgs::Array{Float32,4}, bs::Int)
   N = size(imgs,4)
   return Channel{Array{Float32,4}}(c -> begin
@@ -149,6 +208,20 @@ end
 # =================================================
 # 6) Single-step loss (forward pass)
 # =================================================
+
+"""
+    train_step(m::SimpleUNet, x0)
+
+Performs a single training step for a denoising diffusion model using a Unet
+
+# Arguments
+- `m::SimpleUNet`: neural network model used to predict noise given a noisy embedding and a timestep embedding
+- `x0`: A 4D array representing the original clean inputs
+
+# Returns
+- Mean-squared error (MSE) loss between the predicted noise and the true noise added to the input
+
+"""
 function train_step(m::SimpleUNet, x0)
     B  = size(x0,4)
     ts = rand(1:T, B)                     # random timesteps per example

@@ -18,6 +18,19 @@ const α     = 1 .- β
 const α_cum = accumulate(*, α)    # ᾱ_t = ∏ₛ αₛ
 
 # Copy the SimpleUNet struct definition from the training script
+
+"""
+    ConvBlock(ch_in, ch_out)
+
+Constructs a convolutional block consisting of two sequential convolutional layers
+
+# Arguments
+- `ch_in::Int`: number of input channels
+- `ch_out::Int`: number of output channels
+
+# Returns 
+- Convolutional block
+"""
 function ConvBlock(ch_in, ch_out)
   Chain(
     Conv((3,3), ch_in=>ch_out, pad=1), BatchNorm(ch_out), x->relu.(x),
@@ -34,7 +47,17 @@ struct SimpleUNet
     final::Conv
 end
 
+"""
+    SimpleUNet(channels::Int=1) 
 
+Constructs a simple U-Net model
+
+# Arguments
+- `channels::Int`: number of input channels
+
+# Returns 
+- `SimpleUNet :: Struct`
+"""
 function SimpleUNet(channels::Int=1)
     down1 = Chain(
         Conv((3,3), channels + D => 64, pad=1),
@@ -73,6 +96,18 @@ function SimpleUNet(channels::Int=1)
     SimpleUNet(down1, down2, mid, up2, up1, final)
 end
 
+"""
+
+    (m::SimpleUNet)(x_and_emb)
+
+Applies the forward pass of the 'SimpleUNet' to a noisy image
+
+# Arguments
+- `x_and_emb`: a tuple containg the input image batch and a timestep embedding
+
+# Returns
+- A 4-dimensional array
+"""
 function (m::SimpleUNet)(x_and_emb)
     x, t_emb = x_and_emb
     B = size(x,4)
@@ -96,6 +131,19 @@ function (m::SimpleUNet)(x_and_emb)
 end
 
 # Timestep embedding function (same as in training script)
+
+"""
+    timestep_embedding(t::Integer; D::Int=D)
+
+Generates a sinusoidal timestep embedding of dimension D
+
+# Arguments:
+- `t::Int`: Timestep index
+- `D::Int`: Dimensioin of the embedding
+
+# Returns
+- A vector of length D containg sinusoidal embeddings
+"""
 function timestep_embedding(t::Integer; D::Int=D)
   pe = zeros(Float32, D)
   for i in 1:(D ÷ 2)
@@ -108,6 +156,21 @@ end
 
 
 # Reverse diffusion process
+
+"""
+    reverse_diffusion(model, x_t, t, t_prev)
+
+Performs a single reverse diffusion step using the model
+
+# Arguments
+- `model`: a neural network that predicts the noise component
+- `x_t::Array{Float32, 4}`: noisy image at timestep 't'
+- `t::Int`: Current diffusion timestep
+- `t_prev::Int`: previous timestep to step forward
+
+# Returns
+- `x_{t-1}`: estimated image at timestep `t_prev`
+"""
 function reverse_diffusion(model, x_t, t, t_prev)
     # Prepare timestep embedding of shape (1,1,D,B)
     B = size(x_t, 4)                       # batch size
@@ -152,6 +215,19 @@ end
 
 
 # Image generation function
+"""
+    generate_image(model; num_images=1, image_size=(32,32))
+
+Generates images from noise using the given reverse diffusion model
+
+# Arguments
+- `model`: a trained U-Net model used to generate image
+- `num_images`: number of images to be generated
+- `image_size`: size of the image(s) to be generated
+
+# Returns
+- a 4-dimensional array of generated images
+"""
 function generate_image(model; num_images=1, image_size=(32,32))
     # Start with pure noise
     x_t = randn(Float32, image_size..., 1, num_images)
