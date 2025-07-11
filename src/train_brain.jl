@@ -1,10 +1,8 @@
 using Flux: trainable, Chain, Conv, BatchNorm, MaxPool, ADAM, setup, withgradient, update!
 using Zygote: gradient, @nograd
 using Flux.Losses: mse 
-
-
-using MAT: matread              # for .mat loading
-using BSON: @save        # for checkpointing
+using MAT: matread
+using BSON: @save
 using Plots: plot
 
 # =================================================
@@ -239,9 +237,9 @@ end
 # =================================================
 # 8) Main training loop
 # =================================================
-function train()
+function train(data, lr::Float32=Float32(1e-4), epochs::Int=100, patience::Int=10, min_delta::Float64=0.001)
     # Load & prepare data
-    mat  = matread("SyntheticImages500.mat")
+    mat  = matread(data)
     raw  = mat["syntheticImages"]       # size (32,32,500)
     imgs = reshape(Float32.(raw), 32,32,1,:)
     imgs .*= 2; imgs .-= 1              # scale to [-1,1]
