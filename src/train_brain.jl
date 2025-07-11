@@ -1,42 +1,31 @@
-#!/usr/bin/env julia
-using Flux
-using Flux: trainable
-using Zygote: gradient
+using Flux: trainable, Chain, Conv, BatchNorm, MaxPool, ADAM, setup, withgradient, update!
+using Zygote: gradient, @nograd
 using Flux.Losses: mse 
-
-
-using MAT                 # for .mat loading
-using Random
-using BSON: @save        # for checkpointing
-using Plots
-using Zygote
+using MAT: matread
+using BSON: @save
+using Plots: plot
 
 # =================================================
-# 1) Hyperparameters
+# Hyperparameters
 # =================================================
 const D = 128               # embedding dimension
-const T = 5 #00    @@@@           # diffusion timesteps
+const T = 500               # diffusion timesteps
 
-const β_min = Float32(1e-4)
-const β_max = Float32(0.02)
-const β     = collect(range(β_min, β_max, length=T))
-const α     = 1 .- β
-const α_cum = accumulate(*, α)    # ᾱ_t = ∏ₛ αₛ
+const beta_min = Float32(1e-4)
+const beta_max = Float32(0.02)
+const beta     = collect(range(beta_min, beta_max, length=T))
+const alpha     = 1 .- beta
+const alpha_cum = accumulate(*, alpha)
 
 const batch_size = 64
-const epochs     = 100 ##@@@@@
-const lr         = Float32(2e-4)
+const epochs     = 100
+const lr         = Float32(1e-4)
 
 const patience = 10  # Number of epochs to wait for improvement
 const min_delta = 0.001  # Minimum change to consider as improvement
 
 # =================================================
-# 2) Device (CPU‐only here)
-# =================================================
-device(x) = x
-
-# =================================================
-# 3) Sinusoidal timestep embedding
+# Sinusoidal timestep embedding
 # =================================================
 
 """
@@ -60,10 +49,10 @@ function timestep_embedding(t::Integer; D::Int=D)
   end
   return pe
 end
-Zygote.@nograd timestep_embedding
+@nograd timestep_embedding
 
 # =================================================
-# 4) A small U-Net definition
+# A small U-Net definition
 # =================================================
 
 """
@@ -179,7 +168,7 @@ function (m::SimpleUNet)(x_and_emb)
 end
 
 # =================================================
-# 5) Data loader
+# Data loader
 # =================================================
 
 """
@@ -206,7 +195,7 @@ function batch_iterator(imgs::Array{Float32,4}, bs::Int)
 end
 
 # =================================================
-# 6) Single-step loss (forward pass)
+# Single-step loss (forward pass)
 # =================================================
 
 """
@@ -227,9 +216,9 @@ function train_step(m::SimpleUNet, x0)
     ts = rand(1:T, B)                     # random timesteps per example
     ϵ  = randn(Float32, size(x0))        # noise
 
-    αs = α_cum[ts]
-    a  = reshape(sqrt.(αs), 1,1,1,B)
-    b  = reshape(sqrt.(1 .- αs), 1,1,1,B)
+    alphas = alpha_cum[ts]
+    a  = reshape(sqrt.(alphas), 1,1,1,B)
+    b  = reshape(sqrt.(1 .- alphas), 1,1,1,B)
     x_t = a .* x0 .+ b .* ϵ               # noisy input
 
     t_emb  = hcat(timestep_embedding.(ts)...) |> device
@@ -241,11 +230,11 @@ function train_step(m::SimpleUNet, x0)
 end
 
 # =================================================
-# 8) Main training loop
+# Main training loop
 # =================================================
-function main()
+function train(data, lr::Float32=Float32(1e-4), epochs::Int=100, patience::Int=10, min_delta::Float64=0.001)
     # Load & prepare data
-    mat  = matread("SyntheticImages500.mat")
+    mat  = matread(data)
     raw  = mat["syntheticImages"]       # size (32,32,500)
     imgs = reshape(Float32.(raw), 32,32,1,:)
     imgs .*= 2; imgs .-= 1              # scale to [-1,1]
@@ -254,7 +243,7 @@ function main()
     model = SimpleUNet(1)
     opt   = Adam(lr)
     # Set the optimizer state up
-    state = Flux.setup(opt, model)
+    state = setup(opt, model)
     # Train
     # Add loss tracking
     losses = Float32[]
@@ -264,12 +253,12 @@ function main()
         total_loss, n = Float32(0), 0
         for x0 in batch_iterator(imgs, batch_size)
             # Compute loss and gradients
-            loss, grads = Flux.withgradient(model) do m
+            loss, grads = withgradient(model) do m
                 train_step(m, x0)
             end
             
             # Update model parameters
-            Flux.update!(state, model, grads[1])
+            update!(state, model, grads[1])
             
             total_loss += loss
             n += 1
@@ -291,18 +280,10 @@ function main()
             @warn "Early stopping: No significant improvement for $(patience+1) epochs"
             break
         end
-
-        if epoch % 5 == 0
-            @save "ddpm_epoch_$epoch.bson" model opt epoch
-        end
     end
 
     @save "trained_model.bson" model opt
-    println("Training complete! Model saved.")
+    @info "Training complete! Model saved."
     plot(losses, title="Training Loss", xlabel="Epoch", ylabel="Loss")
     savefig("training_loss.png")
 end
-
-
-main()
-
