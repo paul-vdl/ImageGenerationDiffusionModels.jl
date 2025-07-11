@@ -13,20 +13,20 @@ Ultimately, the model becomes capable of generating a clean image from pure rand
 
 ## Available Functions
 
-- `ImageGenerationDiffusionModels.generate_grid()`  
+- `generate_grid()`  
   Imports the image `SyntheticImages500.mat` (original data) and converts it to a PNG file (`grid.png`). Also returns an array used by other functions.
 
-- `ImageGenerationDiffusionModels.apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)`  
+- `apply_noise(img; num_noise_steps = 500, beta_min = 0.0001, beta_max = 0.02)`  
   Applies Gaussian noise to an image array gradually. Produces `noisy_img.png` and returns the noisy array.
   The default values for num_noise_steps, beta_min, and beta_max are based on commonly used settings in the diffusion model literature to ensure stable training denoising performance
 
-- `ImageGenerationDiffusionModels.train_brain(num_steps::Int = 100)`  
+- `train(data, lr::Float32=Float32(1e-4), epochs::Int=100, patience::Int=10, min_delta::Float64=0.001)`  
   Trains the model to map noisy → clean images.
 
-- `ImageGenerationDiffusionModels.denoise_image(noisy_img::AbstractMatrix{<:Real})`  
+- `denoise_image(noisy_img)`  
   De-noises a noisy image using the trained neural network.
 
-- `ImageGenerationDiffusionModels.generate_image_from_noise()`  
+- `generate_image(;model=model, num_images=1, image_size=(32,32))`  
   Generates a new image from random noise and de-noises it.
 
 ---
@@ -44,18 +44,23 @@ Then in REPL:
 using ImageGenerationDiffusionModels
 ```
 ```julia
+demo()
+```
+It will call the other functions (except `train`) but you can also call them one by one:
+
+```julia
 img = generate_grid()
 ```
 ```julia
 noisy_img = apply_noise(img)
 ```
 ```julia
-train_brain()
+denoised_img = denoise_image(img)
 ```
 ```julia
-denoised_img = denoise_image(img[1:32, 1:32])
+new_img = generate_image()
 ```
+You can also train a model with a dataset (not recommended, it takes a lot of time)
 ```julia
-new_img = generate_image_from_noise()
+train("SyntheticImages500.mat")
 ```
-! The two last functions create a png with the same name so you can only see one at the time
