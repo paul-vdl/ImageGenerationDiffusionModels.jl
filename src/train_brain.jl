@@ -6,7 +6,7 @@ using BSON: @save
 using Plots: plot
 
 # =================================================
-# 1) Hyperparameters
+# Hyperparameters
 # =================================================
 const D = 128               # embedding dimension
 const T = 500               # diffusion timesteps
@@ -25,12 +25,7 @@ const patience = 10  # Number of epochs to wait for improvement
 const min_delta = 0.001  # Minimum change to consider as improvement
 
 # =================================================
-# 2) Device (CPU‐only here)
-# =================================================
-device(x) = x
-
-# =================================================
-# 3) Sinusoidal timestep embedding
+# Sinusoidal timestep embedding
 # =================================================
 
 """
@@ -57,7 +52,7 @@ end
 @nograd timestep_embedding
 
 # =================================================
-# 4) A small U-Net definition
+# A small U-Net definition
 # =================================================
 
 """
@@ -173,7 +168,7 @@ function (m::SimpleUNet)(x_and_emb)
 end
 
 # =================================================
-# 5) Data loader
+# Data loader
 # =================================================
 
 """
@@ -200,7 +195,7 @@ function batch_iterator(imgs::Array{Float32,4}, bs::Int)
 end
 
 # =================================================
-# 6) Single-step loss (forward pass)
+# Single-step loss (forward pass)
 # =================================================
 
 """
@@ -235,7 +230,7 @@ function train_step(m::SimpleUNet, x0)
 end
 
 # =================================================
-# 8) Main training loop
+# Main training loop
 # =================================================
 function train(data, lr::Float32=Float32(1e-4), epochs::Int=100, patience::Int=10, min_delta::Float64=0.001)
     # Load & prepare data

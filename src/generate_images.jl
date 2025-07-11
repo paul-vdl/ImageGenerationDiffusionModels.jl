@@ -2,8 +2,6 @@ using Flux: trainable, ADAM, setup, withgradient, update!
 using BSON: @load
 using Plots: heatmap
 
-# Device handling (CPU-only in this case)
-device(x) = x
 
 # Load the trained model
 @load "trained_model.bson" model
