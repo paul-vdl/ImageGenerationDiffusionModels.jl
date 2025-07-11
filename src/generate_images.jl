@@ -1,7 +1,7 @@
 using Flux: trainable, ADAM, setup, withgradient, update!
 using BSON: @load
 using Plots: heatmap
-
+using ImageGenerationDiffusionModels: SimpleUnet
 
 # Load the trained model
 @load "trained_model.bson" model

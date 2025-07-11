@@ -76,53 +76,8 @@ function demo()
     @info "Demo completed!"
 end
 
-struct SimpleUNet
-    down1::Chain
-    down2::Chain
-    mid::Chain
-    up2::Chain
-    up1::Chain
-    final::Conv
-end
 
-function SimpleUNet(channels::Int=1)
-    down1 = Chain(
-        Conv((3,3), channels + D => 64, pad=1),
-        BatchNorm(64, relu),
-        Conv((3,3), 64 => 64, pad=1),
-        BatchNorm(64, relu)
-    )
-    down2 = Chain(
-        MaxPool((2,2)),
-        Conv((3,3), 64 => 128, pad=1),
-        BatchNorm(128, relu),
-        Conv((3,3), 128 => 128, pad=1),
-        BatchNorm(128, relu)
-    )
-    mid = Chain(
-        Conv((3,3), 128 => 128, pad=1),
-        BatchNorm(128, relu),
-        Conv((3,3), 128 => 128, pad=1),
-        BatchNorm(128, relu)
-    )
-    up2 = Chain(
-        ConvTranspose((2,2), 128 => 64, stride=2),
-        Conv((3,3), 64 => 64, pad=1),
-        BatchNorm(64, relu),
-        Conv((3,3), 64 => 64, pad=1),
-        BatchNorm(64, relu)
-    )
-    up1 = Chain(
-        Conv((3,3), 128 => 64, pad=1),
-        BatchNorm(64, relu),
-        Conv((3,3), 64 => 64, pad=1),
-        BatchNorm(64, relu)
-    )
-    final = Conv((1,1), 64 => 1)
-    
-    SimpleUNet(down1, down2, mid, up2, up1, final)
-end
 
-export generate_grid, apply_noise, train, denoise_image, generate_image, demo
+export generate_grid, apply_noise, train, denoise_image, generate_image, demo, simpleUNet
 
 end  # End of module ImageGenerationDiffusionModels
