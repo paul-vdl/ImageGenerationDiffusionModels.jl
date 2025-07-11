@@ -78,6 +78,6 @@ end
 
 
 
-export generate_grid, apply_noise, train, denoise_image, generate_image, demo, simpleUNet
+export generate_grid, apply_noise, train, denoise_image, generate_image, demo, SimpleUNet
 
 end  # End of module ImageGenerationDiffusionModels
