@@ -76,6 +76,15 @@ function demo()
     @info "Demo completed!"
 end
 
+struct SimpleUNet
+    down1::Chain
+    down2::Chain
+    mid::Chain
+    up2::Chain
+    up1::Chain
+    final::Conv
+end
+
 function SimpleUNet(channels::Int=1)
     down1 = Chain(
         Conv((3,3), channels + D => 64, pad=1),
