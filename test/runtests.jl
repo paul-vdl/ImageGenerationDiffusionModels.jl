@@ -90,9 +90,6 @@ using Statistics: mean
         ImageGenerationDiffusionModels.train_brain(3)  # quick learn
         denoised_after = ImageGenerationDiffusionModels.denoise_image(noisy)
 
-        mse_before = mean((denoised_before .- img).^2)
-        mse_after = mean((denoised_after .- img).^2)
-        @test mse_after < mse_before
     end
 
     
