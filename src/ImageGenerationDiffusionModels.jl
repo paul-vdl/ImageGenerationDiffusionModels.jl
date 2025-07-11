@@ -9,6 +9,15 @@ using Statistics: mean
 include("train_brain.jl")
 include("generate_images.jl")
 
+struct SimpleUNet
+    down1::Chain
+    down2::Chain
+    mid::Chain
+    up2::Chain
+    up1::Chain
+    final::Conv
+end
+
 """
     generate_grid()
 
