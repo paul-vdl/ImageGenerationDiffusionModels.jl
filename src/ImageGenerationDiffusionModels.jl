@@ -7,15 +7,14 @@ using Flux
 
 using NNlib
 using Statistics: mean
-using MLDatasets
 
 
 
-"""# Define the model globally with Float32 types
+# Define the model globally with Float32 types
 const model = Chain(
     Dense(32 * 32, 128, relu),  # First layer
     Dense(128, 32 * 32)         # Second layer
-)"""
+)
 
 
 """
@@ -113,7 +112,6 @@ end
 # Returns
 - Denoised image after the steps
 """
-<<<<<<< HEAD:src/ImageGenerationDiffusionModels.jl
 
 """
     train_brain(num_steps::Int=500)
@@ -128,9 +126,6 @@ Trains neural network model to denoise images
 """
 
 function train_brain(num_steps::Int=100)
-=======
-function train_brain(num_steps::Int=5)
->>>>>>> 108d0d69e61529f3218f180306a3d289a59ed884:src/MyPackage.jl
   # 1) Load the clean images
   data = matread(joinpath(@__DIR__, "..", "SyntheticImages500.mat"))
   raw  = data["syntheticImages"]          # size (32,32,1,500)
@@ -176,7 +171,6 @@ function generate_image_from_noise()
     return generated_img  # Return the generated image
 end
 
-<<<<<<< HEAD:src/ImageGenerationDiffusionModels.jl
 """
     sinusoidal_embedding(t::Vector{Float32}, dim::Int)
 
@@ -190,15 +184,11 @@ Generates sinusoidal positional embeddings from a vector of scalar inputs, typic
 - A matrix of shape `(length(t), dim)` where each row is the embedding of one time step
 """
 function sinusoidal_embedding(t::Vector{Float32}, dim::Int)
-=======
-function sinusoidal_embedding(t, dim)
->>>>>>> 108d0d69e61529f3218f180306a3d289a59ed884:src/MyPackage.jl
     half_dim = div(dim, 2)
     emb = log(10000.0) / (half_dim - 1)
     emb = exp.((-emb) .* (0:half_dim - 1))
     emb = t .* emb'
     emb = hcat(sin.(emb), cos.(emb))
-    emb = [emb[i] for i in 1:size(emb, 2)]
     return emb
 end
 
@@ -220,7 +210,7 @@ function pad_or_crop(x, ref)
     _, _, h2, w2 = size(ref)
     pad_h = max(0, h2 - h1)
     pad_w = max(0, w2 - w1)
-    x = NNlib.pad_zeros(x, (pad_h÷2, pad_h - pad_h÷2, pad_w÷2, pad_w - pad_w÷2), dims = (3, 4))
+    x = pad(x, (0,0), (0,0), (pad_h÷2, pad_h - pad_h÷2), (pad_w÷2, pad_w - pad_w÷2))
     return x[:, :, 1:h2, 1:w2]
 end
 
@@ -249,8 +239,8 @@ function down_block(in_ch, out_ch, time_dim)
 
     return (x, t_emb) -> begin
         h = conv1(x)
-        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, out_ch)
-        h = h .+ permutedims(t_proj, (1,2,4,3))
+        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
+        h = h .+ permutedims(t_proj, (4,1,2,3))
         h = conv2(h)
         return downsample(h), h
     end
@@ -275,7 +265,7 @@ Creates an upsampling block used in U-Net
 """
 function up_block(in_ch, out_ch, time_dim)
     upsample = ConvTranspose((4,4), in_ch => in_ch, stride=2, pad=1)
-    conv1 = Chain(Conv((3,3), in_ch  => out_ch, pad=1), BatchNorm(out_ch), relu)
+    conv1 = Chain(Conv((3,3), in_ch + div(in_ch,2) => out_ch, pad=1), BatchNorm(out_ch), relu)
     conv2 = Chain(Conv((3,3), out_ch => out_ch, pad=1), BatchNorm(out_ch), relu)
     time_mlp = Dense(time_dim, out_ch)
 
@@ -284,8 +274,8 @@ function up_block(in_ch, out_ch, time_dim)
         x = pad_or_crop(x, skip)
         x = cat(x, skip; dims=1)
         h = conv1(x)
-        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, out_ch)
-        h = h .+ permutedims(t_proj, (1,2,4,3))
+        t_proj = reshape(relu(time_mlp(t_emb)), :, 1, 1, size(x)[end])
+        h = h .+ permutedims(t_proj, (4,1,2,3))
         return conv2(h)
     end
 end
@@ -338,8 +328,7 @@ function build_unet(in_ch::Int=1, out_ch::Int=1, time_dim::Int=256)
         x = up1(x4, skip3, t_emb)
         x = up2(x, skip2, t_emb)
         x = up3(x, skip1, t_emb)
-        x = final(x)
-        return x
+        return final(x)
     end
 end
 
@@ -357,71 +346,8 @@ function get_data(batch_size)
     DataLoader((xtrain, ytrain), batchsize=batch_size, shuffle=true)
 end
 
-train_x, train_y = MNIST(split=:train)[:]
-test_x,  test_y  = MNIST(split=:test)[:]
 
-train_imgs = Float32.(train_x) ./ 255.0
-train_imgs = reshape(train_imgs, 28, 28, 1, :)
 
-<<<<<<< HEAD:src/ImageGenerationDiffusionModels.jl
 export generate_grid, apply_noise, train_brain, denoise_image, generate_image_from_noise
-=======
-function pad_to_32(imgs)
-    padded = zeros(Float32, 32, 32, 1, size(imgs, 4))
-    padded[3:30, 3:30, :, :] .= imgs
-    return padded
-end
-
-train_imgs = pad_to_32(train_imgs)
-
-num_steps = 500
-beta_min, beta_max = 0.0001f0, 0.02f0
-betas = collect(LinRange(beta_min, beta_max, num_steps))
-alphas = 1 .- betas
-alpha = accumulate(*, alphas)
-
-function q_sample(x_0, t, epss, alpha)
-    sqrt_alpha_t = reshape(sqrt.(alpha[t]), 1, 1, 1, :)
-    sqrt_one_minus_alpha_t = reshape(sqrt.(1 .- alpha[t]), 1, 1, 1, :)
-    return sqrt_alpha_t .* x_0 .+ sqrt_one_minus_alpha_t .* epss
-end
-
-function loss_fn(model, x_0, t, alpha)
-    epss = randn(Float32, size(x_0))
-    @info "epss", size(epss), typeof(epss)
-    x_t = q_sample(x_0, t, epss, alpha)
-    @info "x_t", size(x_t), typeof(x_t)
-    t_vec = reshape(Float32.(t), 1, size(x_0)[end])
-    @info "t_vec", size(t_vec), typeof(t_vec)
-    epss_pred = model(x_t, t_vec)
-    @info "epss_pred", size(epss_pred), typeof(epss_pred)
-    return mean((epss_pred .- epss).^2)
-end
-
-train_loader = Flux.DataLoader(train_imgs, batchsize=128, shuffle=true)
-
-model = build_unet()
-
-optim = Flux.setup(Adam(3.0f-4), model)
-
-losses = Float32[]
-
-for epoch in 1:5
-    for (i, x_0) in enumerate(train_loader)
-        batch_size = size(x_0)[end]
-        t = rand(1:num_steps, batch_size)
-        @info "x_0", size(x_0), typeof(x_0)
-        loss, grads = Flux.withgradient(m -> loss_fn(m, x_0, t, alpha), model)
-        @info "gradient marche"
-        Flux.update!(optim, model, grads[1])
-        @info "update marche"
-        push!(losses, loss)
-        if isone(i) || iszero(i % 50)
-            acc = accuracy(model) * 100
-            @info "Epoch $epoch, step $i:\t loss = $(loss), acc = $(acc)%"
-        end
-    end
-end
->>>>>>> 108d0d69e61529f3218f180306a3d289a59ed884:src/MyPackage.jl
 
 end  # End of module ImageGenerationDiffusionModels
